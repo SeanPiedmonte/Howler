@@ -50,6 +50,24 @@ int lin_bind(file_desc skt, uint16_t port, uint32_t ip_addr) {
     return res;
 }
 
+int lin_accept(LinuxSocket *skt) {
+    struct sockaddr_in addr;
+
+    addr.sin_family = AF_INET;
+    addr.sin_port   = htons(skt->port);
+    addr.sin_addr.s_addr = htonl(skt->ip_addr);
+
+    int res = accept(skt, (struct sockaddr *)&addr, sizeof(addr));
+    if (res == -1) {
+        switch (errno) {
+            default:
+                perror("ERROR [lin_accept]: ");
+        }
+    }
+
+    return res;
+}
+
 int lin_listen(file_desc skt, int backlog) {
     int res = listen(skt, backlog);
     if (res == -1) {
