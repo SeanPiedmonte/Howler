@@ -35,3 +35,4 @@ LinuxSocket *lin_create_skt(uint16_t port, uint32_t ip_addr);
 int lin_bind(file_desc skt, uint16_port, uint32_t ip_addr);
 int lin_listen(file_desc skt, uint32_t port);
 int lin_recv_msg(LinuxSocket *skt, Message *msg, int flags);
+int lin_accept(LinuxSocket *skt);
