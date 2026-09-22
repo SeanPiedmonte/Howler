@@ -7,8 +7,17 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 
-typedef int file_desc
+#define TRUE 1
+#define FALSE 0
+#define MESSAGE_BUFFER_LEN 1600
+#define RESPONSE_BUFFER_LEN 1600
+
+typedef int file_desc;
+typedef int bool;
 
 typedef struct LinuxSocket {
     file_desc fd;
@@ -36,3 +45,8 @@ int lin_bind(file_desc skt, uint16_port, uint32_t ip_addr);
 int lin_listen(file_desc skt, uint32_t port);
 int lin_recv_msg(LinuxSocket *skt, Message *msg, int flags);
 int lin_accept(LinuxSocket *skt);
+int process_http(file_desc conn);
+int read_method(unsigned char *buf, int buf_len, unsigned char *method);
+bool validate_method(unsigned char *method, int len);
+int lin_send(file_desc conn, const void *response, size_t length, int flags);
+void attach_headers(Message *msg, const void *response, int opts);
