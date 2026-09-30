@@ -67,7 +67,7 @@ int lin_bind(file_desc skt, uint16_t port, uint32_t ip_addr) {
     addr.sin_port   = htons(port);
     addr.sin_addr.s_addr = htonl(ip_addr);
 
-    int res = bind(skt, (struct sockaddr *)&addr, sizeof(addr));
+    res = bind(skt, (struct sockaddr *)&addr, sizeof(addr));
     if (res == -1) {
         switch(errno) {
             default:
