@@ -53,6 +53,14 @@ int lin_recv_msg(LinuxSocket *skt, Message *msg, int flags) {
 }
 
 int lin_bind(file_desc skt, uint16_t port, uint32_t ip_addr) {
+    int opt = 1;
+    int res = setsockopt(skt->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    if (res < 0) {
+        perror("[lin_bind]: ");
+        shutdown(skt->fd, 2);
+        return res;
+    }
+    
     struct sockaddr_in addr;
 
     addr.sin_family = AF_INET;
