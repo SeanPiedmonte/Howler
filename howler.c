@@ -1,15 +1,6 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include "server.h"
-
-int lin_recv_msg(LinuxSocket *skt, Message *msg, int flags) {
-    int size = recv(skt->fd, msg->buffer, msg->buf_len, flags);
-    if (size < 0) {
-        /* signals an error */
-        perror("ERROR [lin_recv_msg]: ");
-        return 0;
-    }
-
-    return size;
-}
 
 LinuxSocket *lin_create_skt(uint16_t port, uint32_t ip_addr) {
     file_desc fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -30,6 +21,35 @@ LinuxSocket *lin_create_skt(uint16_t port, uint32_t ip_addr) {
     skt->ip_addr = ip_addr;
 
     return skt;
+}
+
+int lin_send(file_desc conn, const void *response, size_t length, int flags) {
+    unsigned char buffer[RESPONSE_BUFFER_LEN] = "\0";
+    Message full_response = {0};
+    full_response.buf_len = RESPONSE_BUFFER_LEN;
+    full_response.buffer = buffer;
+
+    attach_headers(&full_response, response, 0);
+
+    printf("FULL RESPONSE: %s\n", (unsigned char *)full_response.buffer);
+    int res = send(conn, full_response.buffer, full_response.buf_len, flags);
+    if (res == -1) {
+        perror("[lin_send]: ");
+        return res;
+    }
+
+    return res;
+}
+
+int lin_recv_msg(LinuxSocket *skt, Message *msg, int flags) {
+    int size = recv(skt->fd, msg->buffer, msg->buf_len, flags);
+    if (size < 0) {
+        /* signals an error */
+        perror("ERROR [lin_recv_msg]: ");
+        return 0;
+    }
+
+    return size;
 }
 
 int lin_bind(file_desc skt, uint16_t port, uint32_t ip_addr) {
@@ -136,30 +156,29 @@ int process_http(file_desc conn) {
     return 0;
 }
 
-int lin_send(file_desc conn, const void *response, size_t length, int flags) {
-    unsigned char buffer[RESPONSE_BUFFER_LEN] = "\0";
-    Message full_response = {0};
-    full_response.buf_len = RESPONSE_BUFFER_LEN;
-    full_response.buffer = buffer;
-
-    attach_headers(&full_response, response, 0);
-
-    printf("FULL RESPONSE: %s\n", (unsigned char *)full_response.buffer);
-    int res = send(conn, full_response.buffer, full_response.buf_len, flags);
-    if (res == -1) {
-        perror("[lin_send]: ");
-        return res;
+int parse_version(unsigned char *buffer, size_t buf_len, int start, unsigned char *version) {
+    if (buf_len == 0) {
+        return -1;
     }
 
-    return res;
-}
+    int i = 0;
+    printf("I: %d, START: %d\n", i, start);
+    for (;;) {
+        if (i > 100) {
+            break;
+        }
+        /*if (buffer[i] == ' ' || buffer[i] == '\r') {
+            printf("BUFFER: %c\n", buffer[i]);
+            i--;
+            break;
+        }*/
+        printf("%d: %c\n", i, buffer[i]);
+        i++;
+    }
 
-void attach_headers(Message *msg, const void *response, int opts) {
-    size_t length = strlen(response);
-    snprintf((unsigned char *)msg->buffer, msg->buf_len, "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n",
-        length, response);
-    msg->buf_len = strlen(msg->buffer);
+    strncpy(version, buffer + start + 1, i-1);
+
+    return i-start;
 }
 
 int parse_target(unsigned char *buffer, int buf_len, int start, unsigned char *target) {
@@ -179,6 +198,29 @@ int parse_target(unsigned char *buffer, int buf_len, int start, unsigned char *t
     strncpy(target, buffer + start + 1, i-1);
 
     return i-start;
+}
+
+void attach_headers(Message *msg, const void *response, int opts) {
+    size_t length = strlen(response);
+    snprintf((unsigned char *)msg->buffer, msg->buf_len, "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s\r\n",
+        length, response);
+    msg->buf_len = strlen(msg->buffer);
+}
+
+int read_method(unsigned char *buf, int buf_len, unsigned char *method) {
+    int i;
+    if (buf_len == 0) {
+        return 0;
+    }
+
+    for (i = 0; i < buf_len; i++) {
+        if (buf[i] == ' ') {
+            return i;
+        }
+
+        method[i] = buf[i];
+    }
 }
 
 bool validate_method(unsigned char *method, int len) {
@@ -212,17 +254,7 @@ bool validate_method(unsigned char *method, int len) {
     }
 }
 
-int read_method(unsigned char *buf, int buf_len, unsigned char *method) {
-    int i;
-    if (buf_len == 0) {
-        return 0;
-    }
-
-    for (i = 0; i < buf_len; i++) {
-        if (buf[i] == ' ') {
-            return i;
-        }
-
-        method[i] = buf[i];
-    }
+volatile sig_atomic_t keep_running = 1;
+void handle_sigint(int sig) {
+    keep_running = 0;
 }
