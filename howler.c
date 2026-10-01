@@ -41,18 +41,18 @@ int lin_send(file_desc conn, const void *response, size_t length, int flags) {
     return res;
 }
 
-int lin_recv_msg(LinuxSocket *skt, Message *msg, int flags) {
-    int size = recv(skt->fd, msg->buffer, msg->buf_len, flags);
+int lin_recv_msg(file_desc conn, Message *msg, int flags) {
+    int size = recv(conn, msg->buffer, msg->buf_len, flags);
     if (size < 0) {
         /* signals an error */
         perror("ERROR [lin_recv_msg]: ");
-        return 0;
+        return -1;
     }
 
     return size;
 }
 
-int lin_bind(file_desc skt, uint16_t port, uint32_t ip_addr) {
+int lin_bind(LinuxSocket *skt) {
     int opt = 1;
     int res = setsockopt(skt->fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (res < 0) {
@@ -64,10 +64,10 @@ int lin_bind(file_desc skt, uint16_t port, uint32_t ip_addr) {
     struct sockaddr_in addr;
 
     addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    addr.sin_addr.s_addr = htonl(ip_addr);
+    addr.sin_port   = htons(skt->port);
+    addr.sin_addr.s_addr = htonl(skt->ip_addr);
 
-    res = bind(skt, (struct sockaddr *)&addr, sizeof(addr));
+    res = bind(skt->, (struct sockaddr *)&addr, sizeof(addr));
     if (res == -1) {
         switch(errno) {
             default:
@@ -86,7 +86,7 @@ int lin_accept(LinuxSocket *skt) {
     addr.sin_addr.s_addr = htonl(skt->ip_addr);
 
     int addr_size = sizeof(addr);
-    int res = accept(skt, (struct sockaddr *)&addr, &addr_size);
+    int res = accept(skt->fd, (struct sockaddr *)&addr, &addr_size);
     if (res == -1) {
         switch (errno) {
             default:
@@ -97,7 +97,7 @@ int lin_accept(LinuxSocket *skt) {
     return res;
 }
 
-int lin_listen(file_desc skt, int backlog) {
+int lin_listen(LinuxSocket *skt, int backlog) {
     int res = listen(skt->fd, backlog);
     if (res == -1) {
         switch(errno) {
@@ -123,20 +123,21 @@ int process_http(file_desc conn) {
     if (res == -1) {
         return res;
     }
-
+    
     unsigned char method[8] = '\0';
-    int met_read = read_method((unsigned char *)msg->buffer, msg->buf_len, method);
-    if (met_read == 0) {
+    int read = read_method((unsigned char *)msg->buffer, msg->buf_len, method);
+    if (read == 0) {
         perror("[process_http] ERROR: NO METHOD TO READ");
         return -1;
     }
 
-    bool valid = validate_method(method, met_read);
+    bool valid = validate_method(method, read);
     if (!valid) {
         perror("[process_http] ERROR: INVALID METHOD");
         return -1;
     }
-
+    read++;
+    
     printf("METHOD: %s\n", method);
 
     unsigned char target[100] = "\0";
@@ -145,11 +146,19 @@ int process_http(file_desc conn) {
         perror("[process_http] NO DATA READ");
         return -1;
     }
+    read += par_read+1;
 
     printf("TARGET: %s\n", target);
 
-    unsigned char version[100]; /* need to create version parsing */
+    unsigned char version[10]; /* need to create version parsing */
+    int ver_read = parse_version((unsigned char *)msg->buffer, msg->buf_len, read, version);
+    if (ver_read == 0) {
+        perror("NO VERSION READ");
+        return -1;
+    }
+    read += ver_read;
 
+    
     unsigned char response[1000] = "\0";
     snprintf(response, 1000, "METHOD: %s\nTARGET: %s\n", method, target);
 
@@ -169,24 +178,38 @@ int parse_version(unsigned char *buffer, size_t buf_len, int start, unsigned cha
         return -1;
     }
 
-    int i = 0;
-    printf("I: %d, START: %d\n", i, start);
+    int i = start;
     for (;;) {
-        if (i > 100) {
+        if (buffer[i] == '\n' || buffer[i] == '\r') {
             break;
         }
-        /*if (buffer[i] == ' ' || buffer[i] == '\r') {
-            printf("BUFFER: %c\n", buffer[i]);
-            i--;
-            break;
-        }*/
-        printf("%d: %c\n", i, buffer[i]);
         i++;
     }
 
-    strncpy(version, buffer + start + 1, i-1);
-
+    strncpy(version, buffer + start, i-start);
+    int res = validate_version(version, i-start);
+    if (!res) {
+        printf("[parse_version]: Invalid Version: %s\n", version);
+        return -1;
+    }
+    
     return i-start;
+}
+
+int validate_version(unsigned char *version, int len) {
+    if (len < 6 || len > 8) {
+        return FALSE;
+    }
+
+    if (!strncmp(version, "HTTP/", 5)) {
+        return FALSE;
+    }
+
+    if (len == 8) {
+        return !(strncmp(version+5, "1.1", 3));
+    } else {
+        return version[5] == "2" || version[5] == "3";
+    }
 }
 
 int parse_target(unsigned char *buffer, int buf_len, int start, unsigned char *target) {
@@ -194,17 +217,25 @@ int parse_target(unsigned char *buffer, int buf_len, int start, unsigned char *t
         return 0;
     }
 
-    int i = start+1;
+    int i = start;
     for(;;) {
         if (buffer[i] == ' ') {
-            i--;
             break;
+        } else {
+            i++;
         }
-        i++;
     }
 
-    strncpy(target, buffer + start + 1, i-1);
+    if (buffer == NULL) {
+        printf("BUFFER is NULL\n");
+        return 0;
+    }
 
+    if (version == NULL) {
+        printf("VERSION is NULL\n");
+    }
+    
+    strncpy(target, buffer + start, i-start);
     return i-start;
 }
 
@@ -222,11 +253,10 @@ int read_method(unsigned char *buf, int buf_len, unsigned char *method) {
         return 0;
     }
 
-    for (i = 0; i < buf_len; i++) {
+    for (i = 0; i < buf_len && i < 8; i++) {
         if (buf[i] == ' ') {
             return i;
         }
-
         method[i] = buf[i];
     }
 }
