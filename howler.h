@@ -43,9 +43,9 @@ void post();
 
 /* Sockets Specific Functions */
 LinuxSocket *lin_create_skt(uint16_t port, uint32_t ip_addr);
-int lin_bind(file_desc skt, uint16_port, uint32_t ip_addr);
-int lin_listen(file_desc skt, uint32_t port);
-int lin_recv_msg(LinuxSocket *skt, Message *msg, int flags);
+int lin_bind(LinuxSocket *skt);
+int lin_listen(LinuxSocket *skt, int backlog);
+int lin_recv_msg(file_desc conn, Message *msg, int flags);
 int lin_accept(LinuxSocket *skt);
 int lin_send(file_desc conn, const void *response, size_t length, int flags);
 
@@ -53,7 +53,8 @@ int process_http(file_desc conn);
 int read_method(unsigned char *buf, int buf_len, unsigned char *method);
 bool validate_method(unsigned char *method, int len);
 void attach_headers(Message *msg, const void *response, int opts);
-void parse_version(unsigned char *buffer, size_t buf_len, int start, unsigned start *version);
+int parse_version(unsigned char *buffer, size_t buf_len, int start, unsigned start *version);
+int validate_version(unsigned char *version, int len);
 void parse_target(unsigned char *buffer, size_t buf_len, int start, unsigned char *target);
 
 void handle_sigint(int sig);
