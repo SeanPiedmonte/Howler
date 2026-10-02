@@ -198,16 +198,20 @@ int parse_version(unsigned char *buffer, size_t buf_len, int start, unsigned cha
 
 int validate_version(unsigned char *version, int len) {
     if (len < 6 || len > 8) {
+        printf("[validate_version] LENGTH: %d\n", len);
         return FALSE;
     }
 
-    if (!strncmp(version, "HTTP/", 5)) {
+    if (strncmp(version, "HTTP/", 5)) {
+        printf("[validate_version] VERSION PREFIX HTTP FAILED\n");
         return FALSE;
     }
 
     if (len == 8) {
+        printf("[validate_version]: VERSION NUMBER FAILED: HTTP version not 1.1\n");
         return !(strncmp(version+5, "1.1", 3));
     } else {
+        printf("[validate_version]: VERSION NUMBER FAILED: HTTP version not 2 or 3\n");
         return version[5] == "2" || version[5] == "3";
     }
 }
@@ -290,6 +294,11 @@ bool validate_method(unsigned char *method, int len) {
         default:
             return FALSE;
     }
+}
+
+int get_host(unsigned char *buffer, size_t buf_len, int start, unsigned char *host) {
+    int i = start;
+    return i-start;
 }
 
 volatile sig_atomic_t keep_running = 1;
