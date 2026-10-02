@@ -20,6 +20,12 @@
 typedef int file_desc;
 typedef int bool;
 
+enum VERSION {
+    HTTP1_1 = 1,
+    HTTP2   = 2,
+    HTTP3   = 3,
+};
+
 typedef struct LinuxSocket {
     file_desc fd;
     
@@ -31,6 +37,16 @@ typedef struct Message {
     int buf_len;
     void *buffer;
 } Message; 
+
+typedef struct Request {
+    unsigned char *method;
+    unsigned char *target;
+    unsigned char *host;
+    unsigned char *user_agent;
+    unsigned char *accept;
+    VERSION       version;
+    int           port;
+} Request;
 
 enum StatusCode {
     STATUSOK = 200,
