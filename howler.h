@@ -1,6 +1,5 @@
 #ifndef SERVER_H
 #define SERVER_H
-#endif
 
 #include <sys/socket.h>
 #include <stdio.h>
@@ -16,15 +15,16 @@
 #define FALSE 0
 #define MESSAGE_BUFFER_LEN 1600
 #define RESPONSE_BUFFER_LEN 1600
+#define METHOD_BUFFER_SIZE 8
 
 typedef int file_desc;
 typedef int bool;
 
-enum VERSION {
+typedef enum VERSION {
     HTTP1_1 = 1,
     HTTP2   = 2,
-    HTTP3   = 3,
-};
+    HTTP3   = 3
+} VERSION;
 
 typedef struct LinuxSocket {
     file_desc fd;
@@ -34,7 +34,7 @@ typedef struct LinuxSocket {
 } LinuxSocket;
 
 typedef struct Message {
-    int buf_len;
+    size_t buf_len;
     void *buffer;
 } Message; 
 
@@ -49,7 +49,7 @@ typedef struct Request {
 } Request;
 
 enum StatusCode {
-    STATUSOK = 200,
+    STATUSOK = 200
 };
 
 void get();
@@ -59,18 +59,22 @@ void post();
 
 /* Sockets Specific Functions */
 LinuxSocket *lin_create_skt(uint16_t port, uint32_t ip_addr);
-int lin_bind(LinuxSocket *skt);
-int lin_listen(LinuxSocket *skt, int backlog);
-int lin_recv_msg(file_desc conn, Message *msg, int flags);
+long lin_bind(LinuxSocket *skt);
+long lin_listen(LinuxSocket *skt, int backlog);
+long lin_recv_msg(file_desc conn, Message *msg, int flags);
 int lin_accept(LinuxSocket *skt);
-int lin_send(file_desc conn, const void *response, size_t length, int flags);
+long lin_send(file_desc conn, const void *response, int flags);
 
-int process_http(file_desc conn);
-int read_method(unsigned char *buf, int buf_len, unsigned char *method);
-bool validate_method(unsigned char *method, int len);
-void attach_headers(Message *msg, const void *response, int opts);
-int parse_version(unsigned char *buffer, size_t buf_len, int start, unsigned start *version);
-bool validate_version(unsigned char *version, int len);
-int parse_target(unsigned char *buffer, size_t buf_len, int start, unsigned char *target);
-int get_host(unsigned char *buffer, size_t buf_len, int start, unsigned char *host);
+long process_http(file_desc conn);
+size_t read_method(char *buf, size_t buf_len, char *method, size_t met_size);
+bool validate_method(const char *method, size_t len);
+void attach_headers(Message *msg, const void *response);
+size_t parse_version(char *buffer, size_t buf_len, size_t start, start *version);
+bool validate_version(const char *version, size_t len);
+size_t parse_target(char *buffer, size_t buf_len, size_t start, char *target);
+size_t get_host(char *buffer, size_t buf_len, size_t start, char *host, size_t host_len);
+
+/* Miscellaneous Utility Functions */
 void handle_sigint(int sig);
+
+#endif
