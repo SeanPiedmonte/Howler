@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "conv_util.h"
 #include "server.h"
 
 LinuxSocket *lin_create_skt(uint16_t port, uint32_t ip_addr) {
